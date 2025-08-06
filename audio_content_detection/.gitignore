@@ -1,0 +1,19 @@
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Uvicorn/FastAPI temp files
+.DS_Store
+
+# Uploads
+/uploads/
+
+# IDE files
+.idea/
+.vscode/

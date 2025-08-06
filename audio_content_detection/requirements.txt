@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+modelscope[audio]
+torch
+openai
+jinja2
+addict
+simplejson
+pydub

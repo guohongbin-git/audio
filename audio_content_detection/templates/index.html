@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>录音内容检测系统</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f7f7f7;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .upload-area {
+            text-align: center;
+            padding: 40px 20px;
+            border: 2px dashed #bdc3c7;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #a9a9a9;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #ecf0f1;
+            border-radius: 8px;
+            white-space: pre-wrap; /* 保持换行和空格 */
+            font-family: 'Courier New', Courier, monospace;
+            word-wrap: break-word;
+        }
+        .hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3498db;
+            animation: spin 1s ease infinite;
+            margin: 20px auto;
+        }
+        #loading-text {
+            text-align:center;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>录音内容检测系统</h1>
+        
+        <div class="upload-area">
+            <p>请选择一个音频文件进行分析</p>
+            <input type="file" id="audioFile" accept="audio/*">
+            <br><br>
+            <button id="uploadButton">上传并分析</button>
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p id="loading-text">正在处理中...</p>
+        </div>
+
+        <div id="resultArea" class="hidden">
+            <h2>识别结果</h2>
+            <div id="transcribedText" class="results"></div>
+            
+            <h2>智能分析</h2>
+            <div id="analysisResult" class="results"></div>
+        </div>
+
+        <div id="errorArea" class="hidden results" style="background-color: #f8d7da; color: #721c24;"></div>
+    </div>
+
+    <script>
+        const audioFileInput = document.getElementById('audioFile');
+        const uploadButton = document.getElementById('uploadButton');
+        const loadingDiv = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
+        const resultArea = document.getElementById('resultArea');
+        const errorArea = document.getElementById('errorArea');
+        const transcribedTextDiv = document.getElementById('transcribedText');
+        const analysisResultDiv = document.getElementById('analysisResult');
+
+        // --- Web Audio API 转换核心功能 ---
+        async function convertAudioToWav(file) {
+            return new Promise((resolve, reject) => {
+                const TARGET_SAMPLE_RATE = 16000;
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const reader = new FileReader();
+
+                reader.onload = async (e) => {
+                    try {
+                        const audioBuffer = await audioContext.decodeAudioData(e.target.result);
+                        const duration = audioBuffer.duration;
+                        const offlineContext = new OfflineAudioContext(1, duration * TARGET_SAMPLE_RATE, TARGET_SAMPLE_RATE);
+                        const source = offlineContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(offlineContext.destination);
+                        source.start(0);
+
+                        const resampledBuffer = await offlineContext.startRendering();
+                        const wavBlob = bufferToWave(resampledBuffer);
+                        resolve(wavBlob);
+                    } catch (err) {
+                        reject(new Error(`音频解码或转换失败: ${err.message}`));
+                    }
+                };
+
+                reader.onerror = () => {
+                    reject(new Error("读取文件失败"));
+                };
+
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function bufferToWave(abuffer) {
+            const numOfChan = abuffer.numberOfChannels;
+            const length = abuffer.length * numOfChan * 2 + 44;
+            const buffer = new ArrayBuffer(length);
+            const view = new DataView(buffer);
+            const channels = [];
+            let i, sample;
+            let offset = 0;
+            let pos = 0;
+
+            // 写入 WAV 头
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8); // file length - 8
+            setUint32(0x45564157); // "WAVE"
+            setUint32(0x20746d66); // "fmt " chunk
+            setUint32(16); // length of format data
+            setUint16(1); // type of format (1=PCM)
+            setUint16(numOfChan); // number of channels
+            setUint32(abuffer.sampleRate); // sample rate
+            setUint32(abuffer.sampleRate * 2 * numOfChan); // byte rate
+            setUint16(numOfChan * 2); // block align
+            setUint16(16); // bits per sample
+            setUint32(0x61746164); // "data" chunk
+            setUint32(length - pos - 4); // data length
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
+
+            // 写入 PCM 数据
+            for (i = 0; i < abuffer.numberOfChannels; i++) {
+                channels.push(abuffer.getChannelData(i));
+            }
+
+            while (pos < length) {
+                for (i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][offset])); // clamp
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; // scale to 16-bit signed int
+                    view.setInt16(pos, sample, true);
+                    pos += 2;
+                }
+                offset++;
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        // --- 上传按钮事件监听 ---
+        uploadButton.addEventListener('click', async () => {
+            const file = audioFileInput.files[0];
+            if (!file) {
+                alert('请先选择一个文件！');
+                return;
+            }
+
+            // 重置UI状态
+            resultArea.classList.add('hidden');
+            errorArea.classList.add('hidden');
+            loadingDiv.classList.remove('hidden');
+            uploadButton.disabled = true;
+            
+            try {
+                // 1. 转换音频
+                loadingText.textContent = '正在转换音频格式... (首次可能较慢)';
+                const wavBlob = await convertAudioToWav(file);
+
+                // 2. 上传转换后的文件
+                loadingText.textContent = '格式转换成功，正在上传并分析...';
+                const formData = new FormData();
+                formData.append('file', wavBlob, `${Date.now()}.wav`);
+
+                const response = await fetch('/process-audio/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || `HTTP 错误! 状态: ${response.status}`);
+                }
+
+                // 3. 显示结果
+                transcribedTextDiv.textContent = result.transcribed_text;
+                analysisResultDiv.textContent = result.analysis_result;
+                resultArea.classList.remove('hidden');
+
+            } catch (error) {
+                console.error('处理失败:', error);
+                errorArea.textContent = `发生错误: ${error.message}`;
+                errorArea.classList.remove('hidden');
+            } finally {
+                // 恢复UI
+                loadingDiv.classList.add('hidden');
+                uploadButton.disabled = false;
+                uploadButton.textContent = '上传并分析';
+            }
+        });
+    </script>
+
+</body>
+</html>
