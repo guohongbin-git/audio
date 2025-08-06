@@ -1,6 +1,8 @@
 
 # 录音内容智能检测系统
 
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/Framework-FastAPI-green.svg)](https://fastapi.tiangolo.com/) [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
+
 这是一个基于语音识别（ASR）和大型语言模型（LLM）的Web应用，用于自动转写长音频文件并从中提取结构化信息。
 
 用户可以上传任意格式的音频文件，系统会将其自动转写为文字，并调用本地运行的Gemma-3模型，根据预设的模板（商品规格、价格、有效期、门店编号）提取关键业务信息。
