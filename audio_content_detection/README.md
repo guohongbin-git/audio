@@ -41,7 +41,7 @@ audio_content_detection/
 
 **前提条件:**
 
-1.  **Python 3.9+**
+1.  **Python**: 建议使用 **Python 3.12.7** (项目当前开发和测试环境版本)。最低要求为 Python 3.9+。
 2.  **FFmpeg**: 必须已安装并配置在系统 PATH 中。 `pydub` 依赖此工具进行音频处理。
     -   *macOS*: `brew install ffmpeg`
     -   *Linux*: `sudo apt install ffmpeg`
